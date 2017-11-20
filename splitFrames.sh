@@ -17,5 +17,5 @@ do
 	echo ${i}; 
 	j=`cut -d '.' -f 1 <<< $i`; 
 	mkdir -p screenshot/${j}/; 
-	ffmpeg -i ${folder}/${i} screenshot/${j}/${j}_%d.png ; 
+	ffmpeg -i ${folder}/${i} -vf fps=1 screenshot/${j}/${j}_%d.png ; 
 done
