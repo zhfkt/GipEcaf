@@ -61,12 +61,20 @@ def get_trained_model(args):
 
 
 def forward_pass(args):
+
+
     ''' Runs a forward pass to segment the image. '''
 
     model = get_trained_model(args)
+	
+	
+    #re-scale to 480*360	
+	
+    oriImg = Image.open(args.input_path)
+    img = oriImg.resize((480, 360), Image.ANTIALIAS)	
 
     # Load image and swap RGB -> BGR to match the trained weights
-    image_rgb = np.array(Image.open(args.input_path)).astype(np.float32)
+    image_rgb = np.array(img).astype(np.float32)
     image = image_rgb[:, :, ::-1] - args.mean
     image_size = image.shape
 
@@ -118,13 +126,33 @@ def forward_pass(args):
         prediction.shape + (3,))
 
     print('Saving results to: ', args.output_path)
+	
+	
+	#re-scale to orginal size
+	
+    largeMaskImage = Image.fromarray(color_image).resize(oriImg.size, Image.ANTIALIAS).convert('L')
+    largeMaskImage = largeMaskImage.point(lambda x: 255 if x>0 else 0)
+
+    with open("temp.jpg", 'wb') as out_file:
+        largeMaskImage.save(out_file)	
+
+	
+	#apply mask	
+		
+    oriImg.putalpha(largeMaskImage);	
+	
+
     with open(args.output_path, 'wb') as out_file:
-        Image.fromarray(color_image).save(out_file)
+        oriImg.save(out_file)
+		
+		
+
+	
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_path', nargs='?', default='images/cat.jpg',
+    parser.add_argument('--input_path', nargs='?', default='images/cat.jpg',
                         help='Required path to input image')
     parser.add_argument('--output_path', default=None,
                         help='Path to segmented image')
