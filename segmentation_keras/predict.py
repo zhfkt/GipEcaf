@@ -10,6 +10,8 @@ from __future__ import print_function, division
 
 import argparse
 import os
+import glob
+
 
 import numpy as np
 from PIL import Image
@@ -62,100 +64,117 @@ def get_trained_model(args):
 
 def forward_pass(args):
 
-
-    ''' Runs a forward pass to segment the image. '''
-
-    model = get_trained_model(args)
+	''' Runs a forward pass to segment the image. '''
+	model = get_trained_model(args)
+	imageFilePathList = [os.path.join(args.input_path, f) for f in  os.listdir(args.input_path)]
 	
-	
-    #re-scale to 480*360	
-	
-    oriImg = Image.open(args.input_path)
-    img = oriImg.resize((480, 360), Image.ANTIALIAS)	
-
-    # Load image and swap RGB -> BGR to match the trained weights
-    image_rgb = np.array(img).astype(np.float32)
-    image = image_rgb[:, :, ::-1] - args.mean
-    image_size = image.shape
-
-    # Network input shape (batch_size=1)
-    net_in = np.zeros((1, input_height, input_width, 3), dtype=np.float32)
-
-    output_height = input_height - 2 * label_margin
-    output_width = input_width - 2 * label_margin
-
-    # This simplified prediction code is correct only if the output
-    # size is large enough to cover the input without tiling
-    assert image_size[0] < output_height
-    assert image_size[1] < output_width
-
-    # Center pad the original image by label_margin.
-    # This initial pad adds the context required for the prediction
-    # according to the preprocessing during training.
-    image = np.pad(image,
-                   ((label_margin, label_margin),
-                    (label_margin, label_margin),
-                    (0, 0)), 'reflect')
-
-    # Add the remaining margin to fill the network input width. This
-    # time the image is aligned to the upper left corner though.
-    margins_h = (0, input_height - image.shape[0])
-    margins_w = (0, input_width - image.shape[1])
-    image = np.pad(image,
-                   (margins_h,
-                    margins_w,
-                    (0, 0)), 'reflect')
-
-    # Run inference
-    net_in[0] = image
-    prob = model.predict(net_in)[0]
-
-    # Reshape to 2d here since the networks outputs a flat array per channel
-    prob_edge = np.sqrt(prob.shape[0]).astype(np.int)
-    prob = prob.reshape((prob_edge, prob_edge, 21))
-
-    # Upsample
-    if args.zoom > 1:
-        prob = interp_map(prob, args.zoom, image_size[1], image_size[0])
-
-    # Recover the most likely prediction (actual segment class)
-    prediction = np.argmax(prob, axis=2)
-
-    # Apply the color palette to the segmented image
-    color_image = np.array(pascal_palette)[prediction.ravel()].reshape(
-        prediction.shape + (3,))
-
-    print('Saving results to: ', args.output_path)
-	
-	
-	#re-scale to orginal size
-	
-    largeMaskImage = Image.fromarray(color_image).resize(oriImg.size, Image.ANTIALIAS).convert('L')
-    largeMaskImage = largeMaskImage.point(lambda x: 255 if x>0 else 0)
-
-    with open("temp.jpg", 'wb') as out_file:
-        largeMaskImage.save(out_file)	
-
-	
-	#apply mask	
+	for imageFilePath in imageFilePathList:
+		#re-scale to 480*360	
 		
-    oriImg.putalpha(largeMaskImage);	
-	
+		print("Now Processing: " + imageFilePath)
 
-    with open(args.output_path, 'wb') as out_file:
-        oriImg.save(out_file)
+		oriImg = Image.open(imageFilePath)
+		img = oriImg.resize((480, 360), Image.ANTIALIAS)	
+
+		# Load image and swap RGB -> BGR to match the trained weights
+		image_rgb = np.array(img).astype(np.float32)
+		image = image_rgb[:, :, ::-1] - args.mean
+		image_size = image.shape
+
+		# Network input shape (batch_size=1)
+		net_in = np.zeros((1, input_height, input_width, 3), dtype=np.float32)
+
+		output_height = input_height - 2 * label_margin
+		output_width = input_width - 2 * label_margin
+
+		# This simplified prediction code is correct only if the output
+		# size is large enough to cover the input without tiling
+		assert image_size[0] < output_height
+		assert image_size[1] < output_width
+
+		# Center pad the original image by label_margin.
+		# This initial pad adds the context required for the prediction
+		# according to the preprocessing during training.
+		image = np.pad(image,
+					   ((label_margin, label_margin),
+						(label_margin, label_margin),
+						(0, 0)), 'reflect')
+
+		# Add the remaining margin to fill the network input width. This
+		# time the image is aligned to the upper left corner though.
+		margins_h = (0, input_height - image.shape[0])
+		margins_w = (0, input_width - image.shape[1])
+		image = np.pad(image,
+					   (margins_h,
+						margins_w,
+						(0, 0)), 'reflect')
+
+		# Run inference
+		net_in[0] = image
+		prob = model.predict(net_in)[0]
+
+		# Reshape to 2d here since the networks outputs a flat array per channel
+		prob_edge = np.sqrt(prob.shape[0]).astype(np.int)
+		prob = prob.reshape((prob_edge, prob_edge, 21))
+
+		# Upsample
+		if args.zoom > 1:
+			prob = interp_map(prob, args.zoom, image_size[1], image_size[0])
+
+		# Recover the most likely prediction (actual segment class)
+		prediction = np.argmax(prob, axis=2)
+
+		# Apply the color palette to the segmented image
+		color_image = np.array(pascal_palette)[prediction.ravel()].reshape(
+			prediction.shape + (3,))
+
+
+
+		#re-scale to orginal size
+
+		largeMaskImage = Image.fromarray(color_image).resize(oriImg.size, Image.ANTIALIAS).convert('L')
+		largeMaskImage = largeMaskImage.point(lambda x: 255 if x>0 else 0)
+
+		#with open("temp.jpg", 'wb') as out_file:
+		#	largeMaskImage.save(out_file)	
+
+		if not args.output_path:
+			input_dir_name, file_name = os.path.split(imageFilePath)
+			output_path = os.path.join(
+				input_dir_name,
+				'{}_seg.jpg'.format(
+					os.path.splitext(file_name)[0]))	
+		else:
+
+			input_dir_name, file_name = os.path.split(imageFilePath);
+			output_path = os.path.join(args.output_path, file_name);
+
+		print('Saving results to: ', output_path)
+
+		#apply mask	
+			
+		oriImg.putalpha(largeMaskImage);	
 		
+		#clear alpha
 		
+		pixdata = oriImg.load()
+		
+		width, height = oriImg.size
+		for y in range(height):
+			for x in range(width):
+				if pixdata[x, y][3] == 0:
+					pixdata[x, y] = (255, 255, 255, 0)
+				
+		with open(output_path, 'wb') as out_file:
+			oriImg.save(out_file)
 
-	
-
-
+			
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', nargs='?', default='images/cat.jpg',
-                        help='Required path to input image')
+    parser.add_argument('--input_path', nargs='?', default='images/',
+                        help='Required folder path to input image')
     parser.add_argument('--output_path', default=None,
-                        help='Path to segmented image')
+                        help='Path to segmented image folder')
     parser.add_argument('--mean', nargs='*', default=[102.93, 111.36, 116.52],
                         help='Mean pixel value (BGR) for the dataset.\n'
                              'Default is the mean pixel of PASCAL dataset.')
@@ -166,12 +185,7 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.output_path:
-        dir_name, file_name = os.path.split(args.input_path)
-        args.output_path = os.path.join(
-            dir_name,
-            '{}_seg.png'.format(
-                os.path.splitext(file_name)[0]))
+
 
     forward_pass(args)
 
