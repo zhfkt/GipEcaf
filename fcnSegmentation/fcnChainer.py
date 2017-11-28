@@ -8,6 +8,7 @@ import re
 import chainer
 import numpy as np
 import skimage.io
+from skimage import transform,data
 
 import fcn
 
@@ -48,7 +49,9 @@ def infer(n_class):
 	
 		print("Processing: " + file)
 		# input
-		img = skimage.io.imread(file)
+		oriImg = skimage.io.imread(file)
+		img = transform.rescale(oriImg, 1.0 / 4.0 , order=0, preserve_range=True)
+		
 		input, = fcn.datasets.transform_lsvrc2012_vgg16((img,))
 		input = input[np.newaxis, :, :, :]
 		if args.gpu >= 0:
@@ -65,12 +68,14 @@ def infer(n_class):
 		#print(lbl_pred)
 		#print(img)		
 		
+		
+		lbl_pred = transform.rescale(lbl_pred, 4.0 , order=0, preserve_range=True)
 		for x in range(len(lbl_pred)):
 			for y in range(len(lbl_pred[x])):
 				#print(len(lbl_pred))
 				#print(len(lbl_pred[x]))
 				if lbl_pred[x, y] == 0:
-					img[x, y] = (255, 255, 255)		
+					oriImg[x, y] = (255, 255, 255)		
 				
         
 
@@ -79,7 +84,7 @@ def infer(n_class):
 		#    lbl_pred=lbl_pred, img=img, n_class=n_class,
 		#    label_names=fcn.datasets.VOC2012ClassSeg.class_names)
 		out_file = osp.join(args.out_dir, osp.basename(file))
-		skimage.io.imsave(out_file, img)
+		skimage.io.imsave(out_file, oriImg)
 		print('==> wrote to: %s' % out_file)
 
 
