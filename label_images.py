@@ -40,9 +40,13 @@ for parent, dirnames, filenames in os.walk(image_folder_path):
         # Sort to show labels of first prediction in order of confidence
         top_k = predictions[0].argsort()[-len(predictions[0]):][::-1]
         
-        for node_id in top_k:
+        for idx, node_id in enumerate(top_k):
             human_string = label_lines[node_id]
-            score = ("%.9f" % predictions[0][node_id])
+            if idx == 0:
+                score = ("%.9f" % 1)
+            else:
+                score = ("%.9f" % 0)
+            #score = ("%.9f" % predictions[0][node_id])
             # print('%s (score = %.5f)' % (human_string, score))
             result_file.write(str(image_name) + ',' + str(human_string) + ',' + str(score) + '\n')
         result_file.flush()
